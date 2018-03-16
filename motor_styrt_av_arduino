@@ -9,7 +9,7 @@ void setup(){
   Serial.begin(9600);
 }
  
-void loop(){
+void loop(){ //for å styre med potensimeter
   potReading = analogRead(potPin);
   motorSpeed = map(potReading, 0, 1023, 0, 255);
   analogWrite(motorPin, motorSpeed);
