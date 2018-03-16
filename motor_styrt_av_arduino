@@ -1,22 +1,12 @@
-const int potPin = A1;
-const int motorPin = 3;
-int potReading;
-int motorSpeed;
- 
+const int transistorPin = 3;	//transistoren venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm
  
 void setup(){
-  pinMode(motorPin, OUTPUT);
-  Serial.begin(9600);
+  pinMode(transistorPin, OUTPUT);	//gir beskjed til arduinoen at den skal sende ut signal fra transistorPin, som er på port 3
 }
  
-void loop(){ //for å styre med potensimeter
-  potReading = analogRead(potPin);
-  motorSpeed = map(potReading, 0, 1023, 0, 255);
-  analogWrite(motorPin, motorSpeed);
-  Serial.print("P");
-  Serial.println(potReading);
-  Serial.print("M");
-  Serial.println(motorSpeed);
-  Serial.println("");
-  delay(1000);
+void loop(){
+	digitalWrite(transistorPin, HIGH);	//skrur på transistoren, og følgelig motoren
+	delay(5000);
+	digitalWrite(transistorPin, LOW);	//skrur av transistoren, og følgelig av motoren
+	delay(5000);
 }
