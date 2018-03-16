@@ -1,0 +1,22 @@
+const int potPin = A1;
+const int motorPin = 3;
+int potReading;
+int motorSpeed;
+ 
+ 
+void setup(){
+  pinMode(motorPin, OUTPUT);
+  Serial.begin(9600);
+}
+ 
+void loop(){
+  potReading = analogRead(potPin);
+  motorSpeed = map(potReading, 0, 1023, 0, 255);
+  analogWrite(motorPin, motorSpeed);
+  Serial.print("P");
+  Serial.println(potReading);
+  Serial.print("M");
+  Serial.println(motorSpeed);
+  Serial.println("");
+  delay(1000);
+}
