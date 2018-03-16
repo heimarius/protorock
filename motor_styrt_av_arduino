@@ -1,5 +1,8 @@
-const int transistorPin = 3;	//transistoren venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm
- 
+//transistoren venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm
+//Motivasjon: Gi arduinoen mulighet til å skru av og på motoren, ved å la den kontrollere strømtilførselen (12V)
+
+const int transistorPin = 3;	
+
 void setup(){
   pinMode(transistorPin, OUTPUT);	//gir beskjed til arduinoen at den skal sende ut signal fra transistorPin, som er på port 3
 }
