@@ -1,32 +1,42 @@
 //transistoren venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm
 //Motivasjon: Gi arduinoen mulighet til å skru av og på motoren, ved å la den kontrollere strømtilførselen (12V)
 
-const int motorKnappPin = 3;
+const int motorKnappPin = 2;
 const int transistorPin =4;  
 const int LEDPin = 5;
-int tidMotorStartet = 0;
+long int tidMotorStartet = 0;
 bool motorStartet = false;
+unsigned long int tidIgjen = 0;
 
-
+unsigned long time;
 
 void setup(){
+  Serial.begin(9600);
+  Serial.print("Halla");
+  
   pinMode (motorKnappPin, INPUT);
   pinMode (transistorPin, OUTPUT); //gir beskjed til arduinoen at den skal sende ut signal fra transistorPin, som er på port 3
   pinMode (LEDPin, OUTPUT);
-  
-  transistorPin = LOW;
-  LEDPin = LOW;
+
+  digitalWrite (transistorPin, LOW);
+  digitalWrite (LEDPin, LOW);
 }
  
-void loop(){
+void loop(){ 
   if (motorKnappPin == HIGH){
     motorStartet = true;
-    tidMotorStartet = millis;
+    tidMotorStartet = millis();
+    Serial.println(tidMotorStartet);
   }
   if (motorStartet) {
+   while (millis() - tidMotorStartet < 300000)
     digitalWrite(transistorPin, HIGH);  //skrur på transistoren, og følgelig motoren
-    digitalWrite(LEDPin, HIGH);
-   while (millis - tidMotorStartet < 50000){
+      digitalWrite(LEDPin, HIGH);
+      Serial.print("Motor har startet"); 
+      tidIgjen = (millis() - tidMotorStartet);
+      Serial.print(tidIgjen);
+      Serial.println("");
+      delay(1000);
      
   }
   }
