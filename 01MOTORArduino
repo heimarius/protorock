@@ -1,0 +1,66 @@
+//transistoren venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm
+//Motivasjon: Gi arduinoen mulighet til å skru av og på motoren, ved å la den kontrollere strømtilførselen (12V)
+
+const int potPin = A0;  //justere fart motor
+const int motorPin = 9;
+
+int potReading;
+int motorSpeed;
+
+const int tidMotorRun = 5*60*1000;          //Hvor lang tid motor skal kjøre i minutter
+const int motorKnappPin = 2;
+//const int transistorPin =4;  
+const int LEDPin = 5;
+long int tidMotorStartet = 0;
+bool motorStartet = false;
+unsigned long int tidIgjen = 0;
+
+unsigned long time;
+
+void setup(){
+  Serial.begin(9600);
+  Serial.print("Halla");
+
+  pinMode(motorPin, OUTPUT);        //justere fart motor
+  analogWrite(motorPin, 0);
+  
+  pinMode (motorKnappPin, INPUT);
+  //pinMode (transistorPin, OUTPUT); //gir beskjed til arduinoen at den skal sende ut signal fra transistorPin, som er på port 3
+  pinMode (LEDPin, OUTPUT);
+
+  //digitalWrite (transistorPin, LOW);
+  digitalWrite (LEDPin, LOW);
+}//end setup
+ 
+void loop(){ 
+  
+  if(digitalRead(motorKnappPin) == HIGH){
+    motorStartet = true;
+    tidMotorStartet = millis();
+    Serial.println(tidMotorStartet);
+  }//end if
+  
+  if(motorStartet) {
+    while (millis() - tidMotorStartet < tidMotorRun) {
+
+      //digitalWrite(transistorPin, HIGH);  //skrur på transistoren, og følgelig motoren
+      potReading = analogRead(potPin);
+      motorSpeed = map(potReading, 0, 1023, 0, 255);
+      analogWrite(motorPin, motorSpeed);                //pwm skrur motoren av/på så fort at vi kan justere hastigheten dens. 
+  
+      digitalWrite(LEDPin, HIGH);
+      Serial.print("Motor har startet"); 
+      tidIgjen = (millis() - tidMotorStartet);
+      Serial.print(tidIgjen);
+      Serial.println("");
+      delay(1000);
+    }//end while
+  }//end if
+  
+  motorStartet = false;
+  
+  //digitalWrite(transistorPin, LOW);
+  analogWrite(motorPin, 0);
+  
+  digitalWrite(LEDPin, LOW);
+}//end loop
