@@ -1,0 +1,147 @@
+////////////////////////////BIBLIOTEKER/////////////////////////////////
+
+#include <FastLED.h>
+#define NUM_LEDS    50
+#define LED_PIN    5
+#define BRIGHTNESS  64
+#define LED_TYPE    WS2811  //WS2812B
+#define COLOR_ORDER GRB
+
+///////////////////////////KONSTANTER OG TYPEDEFINISJONER//////////////////////////////////////
+CRGB leds[NUM_LEDS];
+
+CRGBPalette16 currentPalette;
+TBlendType    currentBlending;
+
+CRGB fargeKommando[8] = {CRGB::Red, CRGB::DarkOrange, CRGB::Gold, CRGB::Green, CRGB::Aqua, CRGB::Purple, CRGB::Gray, CRGB::Black}; //setter en farge i fargefunksjonene
+
+int counter = 0;
+int inCharList[100];
+
+int fargeOppe;  //lagrer mottat farge fra arduino oppe
+int fargeNede;  //lagrer mottat farge fra arduino nede
+
+//String inputString = "";
+String inputStringOppe = "";         // innkommende data oppe
+String inputStringNede = "";          // innkommende data nede
+
+boolean stringCompleteOppe = false;  // whether the string oppe is complete
+boolean stringCompleteNede = false;  // whether the string nede is complete
+
+//////////////////////////////////////////////SETUP/////////////////////////////////////////
+
+void setup() { 
+  delay(3000); // power-up safety delay
+  Serial.begin(9600);
+  FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
+  FastLED.setBrightness(  BRIGHTNESS );
+
+  currentPalette = RainbowColors_p;
+  currentBlending = LINEARBLEND;
+  
+  inputStringOppe.reserve(200);       //setter av ant bytes i minne
+  inputStringNede.reserve(200);
+}//end setup
+
+/////////////////MAIN///////////////////////////////
+
+void loop() {
+  serialEvent();                    //ser etter komunikasjon fra arduino oppe og nede
+  
+  hvilkenFargeFarJegOppe();         //hvis vi får gjennom en komunikasjon fra arduinoen, lagres verdien til int fargeOppe (global verdi) som vi skal bruke for å lyse riktig farge
+  hvilkenFargeFarJegNede();
+  //visFarger();
+
+  fargeFunksjonOppe();
+  fargeFunksjonNede();
+}//end loop
+  
+/////////////////FUNKSJONER////////////////////////
+
+void serialEvent() {
+  while (Serial.available()) {
+    // get the new byte fra enten oppe eller nede:
+
+    char inChar = (char)Serial.read(); //serial.read bytes
+    
+    if (inChar == 'o') {
+      inputStringOppe = (char)Serial.read(); 
+      stringCompleteOppe = true;
+    }//end if
+
+    if (inChar == 'n') {
+      inputStringNede = (char)Serial.read(); 
+      stringCompleteNede = true;
+    }//end if
+  }//end while
+}//end void
+
+void visFarger(){
+  //alleEnFarge(fargeKommando[fargeOppe]);
+  //alleEnFarge(fargeKommando[fargeNede]);
+  //fargeFunksjonOppe();
+  //fargeFunksjonNede();
+  
+  delay(1000);
+}//end void
+
+void hvilkenFargeFarJegOppe(){
+  //fargeOppe = Serial.readBytes(mystr,1) - '0';
+   if (stringCompleteOppe) {
+    //Serial.print(inputStringOppe);
+    fargeOppe = inputStringOppe.toInt();
+    // clear the string:
+    inputStringOppe = "";
+    //stringCompleteOppe = false;
+  }// end if
+}//end void
+
+void hvilkenFargeFarJegNede(){
+  //fargeOppe = Serial.readBytes(mystr,1) - '0';
+   if (stringCompleteNede) {
+    //Serial.print(inputStringNede);
+    fargeNede = inputStringNede.toInt();
+    // clear the string:
+    inputStringNede = "";
+    //stringCompleteNede = false;
+  }// end if
+}//end void
+
+void fargeFunksjonOppe(){
+  for (int k=0; k < NUM_LEDS; k++) {
+    if(!(k%2) && stringCompleteOppe){
+     //alleEnFarge(fargeKommando[fargeOppe]);
+     leds[k] = fargeKommando[fargeOppe];
+    }//end if
+  }//end for
+   FastLED.show();
+   stringCompleteOppe = false;
+}//end void
+
+void fargeFunksjonNede(){
+  for (int k=0; k < NUM_LEDS; k++) {
+    if(k%2 && stringCompleteNede){
+      //alleEnFarge(fargeKommando[fargeNede]);
+      leds[k] = fargeKommando[fargeNede];
+    }//end if
+  }//end for
+   FastLED.show();
+   stringCompleteNede = false;
+}//end void
+
+void alleEnFarge(CRGB farge){         ///farge alle til en farge
+  for( int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = farge; 
+ }//end for
+ 
+ FastLED.show();
+}//end void
+
+/*
+void garGjennomFargene(){
+  for (int i = 0; i < 8; i++){
+    fargeOppe = i; //digitalRead(fargeSensorOppe);
+    //fargeNede = digitalRead(fargeSensorNede);
+  }//end for
+}//end void
+*/
