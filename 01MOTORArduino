@@ -1,27 +1,39 @@
 //transistoren venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm
 //Motivasjon: Gi arduinoen mulighet til å skru av og på motoren, ved å la den kontrollere strømtilførselen (12V)
+//Den grønne knappen pulserer når motoren ikke går
 
+//MOTOR
 const int potPin = A0;  //justere fart motor
-const int motorPin = 9;
+const int motorPin = 3; //tranistor, OUTPUT
 
 int potReading;
 int motorSpeed;
 
 const int tidMotorRun = 5*60*1000;          //Hvor lang tid motor skal kjøre i minutter
-const int motorKnappPin = 2;
-//const int transistorPin =4;  
-const int LEDPin = 5;
+const int motorKnappPin = 2;   //INPUT
+const int LEDPin = 7;         //OUTPUT
 long int tidMotorStartet = 0;
 bool motorStartet = false;
 unsigned long int tidIgjen = 0;
 
 unsigned long time;
 
+//LED
+#include "FastLED.h"
+#define NUM_LEDS 13  // # of LEDS in the strip
+CRGB leds[NUM_LEDS];
+#define DATA_PIN 7 // Output Pin to Data Line on Strip
+
+int fadeAmount = 5;  // Set the amount to fade I usually do 5, 10, 15, 20, 25 etc even up to 255.
+int brightness = 0;
+
 void setup(){
   Serial.begin(9600);
   Serial.print("Halla");
 
   pinMode(motorPin, OUTPUT);        //justere fart motor
+  analogWrite(motorPin, 1023);
+  delay(2000);
   analogWrite(motorPin, 0);
   
   pinMode (motorKnappPin, INPUT);
@@ -30,6 +42,8 @@ void setup(){
 
   //digitalWrite (transistorPin, LOW);
   digitalWrite (LEDPin, LOW);
+
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS); //til LED
 }//end setup
  
 void loop(){ 
@@ -37,8 +51,14 @@ void loop(){
   if(digitalRead(motorKnappPin) == HIGH){
     motorStartet = true;
     tidMotorStartet = millis();
+    knappeLysAv();
     Serial.println(tidMotorStartet);
   }//end if
+
+  else {
+    knappeLysPa();
+    Serial.println("LOW");
+  }
   
   if(motorStartet) {
     while (millis() - tidMotorStartet < tidMotorRun) {
@@ -64,3 +84,30 @@ void loop(){
   
   digitalWrite(LEDPin, LOW);
 }//end loop
+
+void knappeLysPa(){
+  for(int i = 0; i < NUM_LEDS; i++ )
+   {
+   leds[i].setRGB(0,255,0);  // setRGB functions works by setting
+                             // (RED value 0-255, GREEN value 0-255, BLUE value 0-255)
+                             // RED = setRGB(255,0,0)
+                             // GREEN = setRGB(0,255,0)
+   leds[i].fadeLightBy(brightness);
+  }
+  FastLED.show();
+  brightness = brightness + fadeAmount;
+  // reverse the direction of the fading at the ends of the fade:
+  if(brightness == 0 || brightness == 255)
+  {
+    fadeAmount = -fadeAmount ;
+  }   
+  delay(20);  // This delay sets speed of the fade. I usually do from 5-75 but you can always go higher.
+}
+
+
+void knappeLysAv(){
+  for(int i = 0; i < NUM_LEDS; i++ ){
+    leds[i] = CRGB::Black;
+    }
+   FastLED.show();
+}
