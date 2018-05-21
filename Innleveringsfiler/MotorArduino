@@ -1,0 +1,116 @@
+/*
+  Kode til Motor-Arduino
+
+  Koden styrer en +12V motor og en digital led-stripe av typen FastLED.
+  I første omgang starter den et pulserende, grønt lys på startknappen.
+  Den venter på et knappetrykk fra bruker. Når startknappen trykkes vil motoren startes. Farten til motoren bestemmes av hvor raskt en transistor skrur av og på strømtilførselen til motoren.
+  Når motoren er i gang vil led-stripen til start-knappen slukke, for å vise bruker at den ikke er interaktiv lengre. 
+  Når motoren har gått x antall minutter, definert i koden, vil den stoppe, og lyset på start-knappen vil starte å pulsere igjen.
+
+  Kretsoppkopling finnes på https://protorock.wordpress.com/2018/05/21/innlegg-20-endelig-forklaring-av-prototypen/
+
+  programmert 2018
+  av Andre, Ida, Ida Maria, Marius og Miriam 
+
+  This example code is in the public domain.
+
+  https://github.com/heimarius/protorock
+*/
+
+////////////////////////BIBLIOTEKER///////////////////////////////////////
+
+#include "FastLED.h"                        //bibliotek benyttes for å snakke med led-stripen til start-knappen, som er en digital led-stripe                              
+
+#define NUM_LEDS 13                         //antall led-pærer på stripen
+#define DATA_PIN 7                          //her sendes data til stripen
+CRGB leds[NUM_LEDS];
+
+///////////////////////GLOBALE KONSTANTER/////////////////////////////////
+
+//MOTOR
+const int potPin = A0;                      //Et potensiometer som vi benytter til å justere farten på motoren. Dette skal ikke bruker vite om, så potensiometer er gjemt. Er ment for å kunne justere på motorfarten i tilfelle den begynner å gå saktere over tid.
+const int motorPin = 3;                     //En transistor koplet på motorPin venter på et "høyt" signal fra arduinoen for å slå seg på, og da vil motoren få strøm. Ved å bruke pwm kan vi slå av å på motoren så fort at det virker kontinuerlig, og da kan vi endre hvor fort den går ved å endre intervallet mellom på/av
+
+int potReading;                             //verdien vi leser fra potensiometeret
+int motorSpeed;                             //verdien på hastigheten vi ber motoren holde
+
+const int tidMotorRun = 5*60*1000;          //Hvor lang tid motor skal kjøre (i minutter) etter at brukeren har startet den
+const int motorKnappPin = 2;                //Denne knappen starter motoren. Er den store grønne knappen som bruker tråkker på for å starte showet.
+const int LEDPin = 7;                       //Startknappen har et led-lys som pulserer når knappen kan starte motoren. Lyset slukker mens motoren er i gang.
+unsigned long int tidMotorStartet = 0;      //Konstant for å holde øye med hvor lenge motoren har gått
+bool motorStartet = false;                  //Bool for å holde øye med om motor er i gang eller ikke.
+
+//LED-stripe
+int fadeAmount = 5;                         //to konstanter som benyttes til å gi led-stripen en "pulserende" effekt
+int brightness = 0;
+
+////////////////////////////////SETUP/////////////////////////////////////
+
+void setup(){
+  
+  pinMode(motorPin, OUTPUT);                
+  analogWrite(motorPin, 1023);              //skrur motor på i 2 sek for å se at den får strøm og at koden er initiert)
+  delay(2000);
+  analogWrite(motorPin, 0);
+  
+  pinMode (motorKnappPin, INPUT);
+  pinMode (LEDPin, OUTPUT);
+
+  digitalWrite (LEDPin, LOW);
+
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);    //til LED, bygger en matrise av leds vi har oppgitt som tilgjengelige 
+}//end setup
+
+////////////////////////////////////MAIN///////////////////////////////////////
+
+void loop(){ 
+  
+  if(digitalRead(motorKnappPin) == HIGH){                 //hvis bruker tråkker på start-knappen
+    motorStartet = true;                                  //slår denne til høy for å holde oversikt over at motor er startet
+    tidMotorStartet = millis();                           //noterer tidspunktet der motor ble startet. nå skal den gå i x antall minutter, styrt av int tidMotorRun
+    knappeLysAv();                                        //funksjon som slår av led-en, så bruker får indikasjon på at denne ikke kan brukes når motoren er i gang
+  }//end if
+  else {
+    knappeLysPa();                                        //funksjon som slår på pulse-effekt på motorstartknappen, og indikerer til bruker at denne skal trykkes på.
+  }//end else
+  
+  if(motorStartet) {                                      //sjekker om motoren er i gang
+    while (millis() - tidMotorStartet < tidMotorRun) {    //så lenge motoren har gått kortere enn hva vi har bedt om i int tidMotorRun
+      potReading = analogRead(potPin);                    //her leser vi fra potensiometeret hvor fort vi ønsker at motoren skal gå
+      motorSpeed = map(potReading, 0, 1023, 0, 255);      //dette mappes så til 256 bit-verdier 
+      analogWrite(motorPin, motorSpeed);                  //pwm skrur motoren av/på så fort at vi kan justere hastigheten. 
+      delay(1000);                                        //delay så arduino rekker å lese verdier 
+    }//end while
+  }//end if
+  
+  motorStartet = false;                                   //når motor er ferdig med å kjøre, setter vi bool til false så vi vet den ikke er i gang
+  knappeLysPa();                                          //vi slår på igjen startknapp-lyset så bruker kan se at knappen kan brukes igjen
+  analogWrite(motorPin, 0);                               //vi slår av motoren
+}//end loop
+
+//////////////////////////////FUNKSJONER///////////////////////////////
+
+void knappeLysPa(){                                       //funksjon som skrur på led-strip-lyset på start-knappen. Vil gi et pulserende, grønt lys
+  for(int i = 0; i < NUM_LEDS; i++ ) {                    //gjør lysene sterkere og sterkere
+    leds[i].setRGB(0,255,0);
+    leds[i].fadeLightBy(brightness);
+  }//end for
+    
+  FastLED.show();                                         //funksjon som oppdaterer ledstripen med nyeste instruksjoner fra arduinoen
+  
+  brightness = brightness + fadeAmount;
+  
+  if(brightness == 0 || brightness == 255) {              //reverserer faden fra å bli sterkere til å bli svakere
+    fadeAmount = -fadeAmount ;
+  }//end if
+  
+  delay(20);                                              //denne forsinkelsen bestemmer hvor fort pulse-funksjonen går
+}//end void
+
+void knappeLysAv(){                                       //funksjon som skrur av alle leds-ene, så bruker ser at knappen ikke har en funksjon mens motoren er i gang
+  for(int i = 0; i < NUM_LEDS; i++ ){
+    leds[i] = CRGB::Black;                                //skriver alle leds-ene til svart, altså intet lys
+  } 
+  
+  FastLED.show();                                         //funksjon som oppdaterer ledstripen med nyeste instruksjoner fra arduinoen
+}//end void
