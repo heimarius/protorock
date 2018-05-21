@@ -1,0 +1,190 @@
+/*
+  Kode til Sensor-Arduino
+
+  Koden setter opp komunikasjon mellom en arduino og en fargesensor av typen Adafruit_TCS34725. 
+  Koden går igjennom en kalibreringsprosess i setup-en, hvor den blar gjennom hver farge og venter på input fra en knapp. 
+  Når knappen trykkes, vil arduinoen hente farge-data (R, G, B) fra sensoren og lagre i en liste. 
+  Arduinoen vil gi beskjed til en analog led-stripe hvilken farge den venter på kalibrering fra, slik at led-stripen lyser opp i denne fargen.
+  På denne måten forstår man hvilken farge den ønsker å kalibrere.
+  Når kalibreringen er ferdig vil fargesensorene lese farger kontinuerlig. 
+  Koden vil teste de leste verdiene opp mot de 7 fargene som ble lagret med respektive R, G, B verdier i lister. 
+  Koden tar hensyn til en feilmargin når den sjekker. 
+  Hvis koden ikke finner en match mellom lest farge og lagret farge, vil ingen ting skje.
+  Når koden finner en farge, vil led-stripen lyse opp i fargen som er funnet, og en korresponderende tone vil spilles av.
+
+  Kretsoppkopling finnes på https://protorock.wordpress.com/2018/05/21/innlegg-20-endelig-forklaring-av-prototypen/
+
+  programmert 2018
+  av Andre, Ida, Ida Maria, Marius og Miriam 
+
+  This example code is in the public domain.
+
+  https://github.com/heimarius/protorock
+*/
+
+////////////////////////BIBLIOTEKER///////////////////////////////////////
+
+#include <Wire.h>                                                                                   //bibliotek som lar oss snakke med fargesensor over i2c porten
+#include "Adafruit_TCS34725.h"                                                                      //bilbliotek som lar oss snakke med og benytte funksjoner til fargesensoren
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_700MS, TCS34725_GAIN_1X);
+
+///////////////////////GLOBALE KONSTANTER/////////////////////////////////
+
+const int redPin= 3;                                                                                //Pins til RGB-stripen
+const int bluePin = 5;
+const int greenPin = 6;
+
+const int musikkUt = 8;                                                                             //pin hvor musikk-signalet sendes ut
+const int antallFarger = 7;                                                                         //antall farger vi har med i prosjektet
+const int kalibreringsKnapp = 2;                                                                    //hvilken pin kalibreringsknappen er koblet til
+
+int fargerLest[] = {0,0,0};                                                                         //liste med r, g og b veridene som sensoren nettopp har lest av
+int fargeRegister[antallFarger][3] = {};                                                            //her lagres r, g og b -verdiene for hver av de syv fargene i kalibreringsprosessen
+int feilmargin = 1000;                                                                              //En feilmargin som skal gjøre det lettere for fargesensoren å registrere riktig farge, ettersom variasjoner i lysforhold gjør at sensoren ikke alltid finner fargen 
+int samme[] = {0, 0, 0};                                                                            //denne lista skal si noe om den leste verdien er det samme som noen av fargene i registeret. 0 er ulik, og 1 er lik. det er tre tall, en for hver av rgb. kunne kanskje vært en liste med booleans?
+bool firstPress = true;                                                                             //litt logikk for at bare en farge skal registreres hver gang man trykker på kalibreringsknappen. brukes i koden som forhindrer at for-løkken
+uint16_t r, g, b, c, colorTemp, lux;                                                                //oppretter verdier ifbm fargesensoren. Disse skal hentes ut vha i2c porten. Benytter ikke colorTemp, lux, men de er definert fordi det er vanskelig å kompilere koden uten. Mulig biblioteket til sensoren krever at de er definert.
+
+const int noter[7] = {                                                                              //Liste med frekvenser for de 7 notene vi benytter
+  261, // C4 
+  294, // D4
+  329, // E4
+  349, // F4
+  392, // G4
+  440, // A4
+  494  // H4
+};
+
+int listeRGBVerdier[antallFarger][3] = {{255, 0, 0},{255, 140, 0}, {255, 255, 0}, {0, 128, 0}, {0, 0, 255}, {128, 0, 128}, {255, 255, 255}};    //liste med RGB-verdier til RGB-lampen, korresponderer med våre 7 farger
+
+////////////////////////////////SETUP/////////////////////////////////////
+
+void setup() {
+  Serial.begin(9600);                                                                           //starter komunikasjon med arduino, benyttes til debugging
+  
+  foundSensor();                                                                                //funksjon ser om den finner sensor, gir tilbakemelding på om den er koblet riktig. Funksjonen er definert nederst
+
+  pinMode(kalibreringsKnapp, INPUT);                                                            //knappen som skal aktivere kalibreringen av fargene settes som input
+
+  pinMode(musikkUt, OUTPUT);                                                                    
+  digitalWrite(musikkUt, LOW);                                                                  //hindrer støy på lydutgangen.
+  
+  pinMode(redPin, OUTPUT);                                                                      //Definerer pins for en RGB-led som benyttes for å vise farge som er lest
+  pinMode(greenPin, OUTPUT);
+  pinMode(bluePin, OUTPUT);
+
+  setColor(0,255,0);                                                                            //Gir et klarsignal med RGB-led-en, for å vise at den booter opp
+  delay(1000);
+  setColor(0,0,0);
+  
+  tcs.getRawData(&r, &g, &b, &c);                                                               //leser verdier fra fargesensor over i2c porten
+  
+  fargerLest[0] = r;
+  fargerLest[0] = g;
+  fargerLest[0] = b;
+
+  //Under starter en kalibreringsprosess av fargesensoren. For-løkken skal kjøre igjennom fargelisen vår, og vente på input fra bruker mellom hver itterasjon. Bruker legger fargekloss som korresponderer med farge over sensor, og trykker på knapp.
+  //Da leser fargesensor R,G,B verdier til fargen og sender til arduinoen. For at bruker skal se hvilken farge som er ment å kalibrere, vil rgb-stripen lyse opp i matchende farge.
+  
+  for (int i =0; i< antallFarger ; i++){                                                        //for-løkke som skal kjøre igjennom alle fargene i en kalibreringsprosess.
+    //Serial.print("\n"); Serial.print(Farger[i]); Serial.print(": "); Serial.print("\t");
+    setColor(listeRGBVerdier[i][0], listeRGBVerdier[i][1], listeRGBVerdier[i][2]);              //setter fargen som skal kalibreres til RGB-lampen så vi ser hvilken farge som skal leses av
+    delay(100);
+
+    //Under er to if-setninger inkludert for å unngå at for-løkken går gjennom for fort. Da blir alle fargene registrert med de sammen verdiene. I stedet for venter den på knappetrykkene fra bruker i kalibreringsprosessen 
+    
+    if (firstPress){
+      while (digitalRead(kalibreringsKnapp)) {                                                          
+      }//end while
+    }//end if
+    firstPress = false;
+    if (!firstPress) {
+      while (!digitalRead(kalibreringsKnapp)){
+      }//end while 
+    }//end if
+    firstPress = true;                                                                              
+
+    //ferdig med logikken som gjør at koden venter på knappetrykkene fra bruker i kalibreringsprosessen
+    
+    tcs.getRawData(&r, &g, &b, &c);                                                                 //leser verdier fra fargesensor over i2c porten
+    
+    fargerLest[0] = r;
+    fargerLest[1] = g;
+    fargerLest[2] = b;
+    
+    for (int j =0; j<3; j++){                                                                       //skriver inn i fargeRegister. Her kunne vi skrevet om anderledes, men ønsket å bruke en løkke.
+      fargeRegister[i][j] = fargerLest[j];  
+      }//end for    
+  }//end for
+  
+  Serial.print("\n \n");
+}//end setup
+
+////////////////////////////////////MAIN///////////////////////////////////////
+
+void loop() {
+  tcs.getRawData(&r, &g, &b, &c);                                                                 //leser verdier fra fargesensor over i2c porten
+
+  fargerLest[0] = r;
+  fargerLest[1] = g;
+  fargerLest[2] = b;
+   
+  if (!((samme[0] == 1)and (samme[1] == 1)and (samme[2] == 1))){                                  //if-setning som sjekker om samme-listen inneholder "0", "0", "0". Hvis ja, betyr det at den ikke har funnet en farge-match 
+    setColor(0,0,0);                                                                              //resetter RGB-lampen, den lyser ikke
+    //hvis ikke verdiene for r, g og b ligner på noe i lista skjer ingen ting. Dette vil være
+    //tilfellet første gang uansett, og hvis hele for-løkka går uten at en lignende farge blir funnet  
+  }//end if
+  
+  for (int i =0; i< antallFarger; i++){                                                             //itererer gjennom alle fargene
+    resetSamme();                                                                                   //funksjon som setter samme-listen lik "0", "0", "0" slik at vi kan sjekke en ny farge og lagre 1-ere i den om r g og b verdiene stemmer.
+      
+    for (int j =0; j<3; j++){
+      if (fargerLest[j] > ( fargeRegister[i][j] - feilmargin) and fargerLest[j] < (fargeRegister[i][j] +feilmargin)){   //sjekker med feilmarginen. Her kunne vi benyttet abs() fra math-biblioteket for å korte ned if-statementet
+        samme[j] = 1;                                                                                                   //et av tallene i listen samme går fra 0 til 1
+      }//end if
+    }//end for
+
+    if (((samme[0] == 1)and (samme[1] == 1)and (samme[2] == 1))){                                               //hvis veriden for r,g og b stemmte overens for forrige farge er alle tallene i listen samme 1  
+      setColor(listeRGBVerdier[i][0], listeRGBVerdier[i][1], listeRGBVerdier[i][2]);                            //setter fargen som matchet til RGB-lampen så vi får visuel tilbakemld på match
+      delay(100);
+      tone(musikkUt, noter[i], 200);                                                                            //spiller av en rask note som samsvarer med fargen
+    }//end if
+  }//end for
+}//end loop
+
+//////////////////////////////FUNKSJONER///////////////////////////////
+
+void foundSensor(){                                                                             //funksjonen sjekker om fargesensoren er koplet til arduinoen og komuniserer
+  if (tcs.begin()) {
+    Serial.println("Found sensor");
+  }//end if 
+  else {
+    Serial.println("No TCS34725 found ... check your connections");                             //sjekker at sensoren er koblet til riktig
+    delay(1000);
+    foundSensor();                                                                              //kaller på seg selv for å sjekke om den har fått kontakt med sensor 1 sek senere.
+  }//end else
+}//end foundSensor
+
+
+void printSamme (){                                                                             //funksjonen printer ut listen samme[]
+  Serial.print("samme[] = ");
+  for(int i = 0; i < 3; i++){
+      
+    Serial.print(samme[i]);
+    Serial.print(",");
+    }//end for
+
+    Serial.println();
+}//end printSamme
+
+void resetSamme(){                                                                              //funksjonen setter samme-listen til "0", "0", "0" slik at vi kan lagre en 1-er hvis vi får en match med r, g og b i den fargen som testes 
+  for(int i = 0; i < 3; i++){
+    samme[i] = 0;
+  }//end for
+}//end resetSamme
+
+void setColor(int redValue, int greenValue, int blueValue) {                                    //funksjonen skriver en farge til RGB-lampa som respons på den fargen sensor oppdager
+  analogWrite(redPin, redValue);
+  analogWrite(greenPin, greenValue);
+  analogWrite(bluePin, blueValue);
+}//end setColor
